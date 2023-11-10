@@ -4,9 +4,13 @@ from transformers import pipeline
 from transformers import OpenAIGPTTokenizer, OpenAIGPTModel
 import pandas as pd
 from metrics import compute_metrics
+from preprocess import preprocess_trivia
 
-tokenizer = OpenAIGPTTokenizer.from_pretrained("openai-gpt")
+tokenizer = OpenAIGPTTokenizer.from_pretrained("openai-gpt", return_tesnors='pt')
 model = OpenAIGPTModel.from_pretrained("openai-gpt")
+
+#%%
+model.config
 
 #%%
 from datasets import load_dataset
@@ -14,19 +18,39 @@ from datasets import load_dataset
 dataset = load_dataset("trivia_qa", "unfiltered")
 
 #%%
+dataset['train'].to_pandas()
 
-def tokenize(batch) :
-    return tokenizer(batch['text'], padding=True, truncation=True)
+#%%
+dataset['train']['search_results'][0]
 
-dataset_encoded = dataset.map(tokenize, batched=True, batch_size=None)
+#%%
+dataset['train']['answer'][0]
+
+#%%
+a = tokenizer(dataset['train']['question'][1])
+
+
+#%%
+from transformers import AutoModelForQuestionAnswering
+model = AutoModelForQuestionAnswering.from_pretrained("openai-gpt")
+
+
 #%%
 
-from transformers import Trainer, TrainingArguments
+def tokenize(batch) :
+    return tokenizer(batch['question'], padding=True, truncation=True)
 
-batch_size = 64
+dataset_encoded = dataset.map(tokenize, batched=True, batch_size=None)
+
+#%%
+
+from transformers import Trainer, TrainingArguments, AutoModelForQuestionAnswering
+
+batch_size = 16
 logging_steps = len(dataset_encoded["train"])
 model_name = f"openai-gpt-finetuned-triviaqa"
 training_args = TrainingArguments(output_dir= model_name,
+                                  evaluation_strategy="epoch",
                                   num_train_epochs = 2,
                                   learning_rate=2e-5,
                                   per_device_train_batch_size=batch_size,
@@ -40,13 +64,13 @@ training_args = TrainingArguments(output_dir= model_name,
 
 
 #%% We now use the Trainer
-from transformers import Trainer
 
 trainer = Trainer(model=model, args=training_args,
                   compute_metrics=compute_metrics,
                   train_dataset=dataset_encoded["train"],
                   eval_dataset=dataset_encoded["validation"],
-                  tokenizer=tokenizer)
+                  tokenizer=tokenizer,
+                  data_collator=)
 
 trainer.train()
 
