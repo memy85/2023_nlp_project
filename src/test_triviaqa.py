@@ -1,81 +1,60 @@
 
 #%%
-from transformers import pipeline
-from transformers import OpenAIGPTTokenizer, OpenAIGPTModel
+from transformers import pipeline, QuestionAnsweringPipeline
+from transformers import GPT2Tokenizer, GPT2ForQuestionAnswering
 import pandas as pd
 from metrics import compute_metrics
 from preprocess import preprocess_trivia
-
-tokenizer = OpenAIGPTTokenizer.from_pretrained("openai-gpt", return_tesnors='pt')
-model = OpenAIGPTModel.from_pretrained("openai-gpt")
-
-#%%
-model.config
-
-#%%
 from datasets import load_dataset
 
+tokenizer = GPT2Tokenizer.from_pretrained("gpt2", return_tesnors='pt')
+model = GPT2ForQuestionAnswering.from_pretrained("gpt2")
+
+
+#%%
 dataset = load_dataset("trivia_qa", "unfiltered")
 
 #%%
-dataset['train'].to_pandas()
+from transformers import GPT2LMHeadModel, Trainer, TrainingArguments
 
 #%%
-dataset['train']['search_results'][0]
+tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
+model = GPT2LMHeadModel.from_pretrained("gpt2")
+tokenizer.pad_token = tokenizer.eos_token
 
 #%%
-dataset['train']['answer'][0]
+# Tokenize dataset
+def tokenize_function(examples):
+    return tokenizer(examples['question'], padding="max_length", truncation=True,
+            max_length = 33)
+
+tokenized_dataset = dataset.map(tokenize_function, batched=True)
+
+
 
 #%%
-a = tokenizer(dataset['train']['question'][1])
+# Define training arguments
+training_args = TrainingArguments(
+    output_dir="./gpt2_triviaqa",
+    overwrite_output_dir=True,
+    num_train_epochs=3,
+    per_device_train_batch_size=4,
+    save_steps=1000,
+    save_total_limit=2,
+)
 
+# Define trainer
+trainer = Trainer(
+    model=model,
+    args=training_args,
+    train_dataset=tokenized_dataset["train"],
+    eval_dataset=tokenized_dataset["test"]
+)
 
 #%%
-from transformers import AutoModelForQuestionAnswering
-model = AutoModelForQuestionAnswering.from_pretrained("openai-gpt")
-
-
-#%%
-
-def tokenize(batch) :
-    return tokenizer(batch['question'], padding=True, truncation=True)
-
-dataset_encoded = dataset.map(tokenize, batched=True, batch_size=None)
-
-#%%
-
-from transformers import Trainer, TrainingArguments, AutoModelForQuestionAnswering
-
-batch_size = 16
-logging_steps = len(dataset_encoded["train"])
-model_name = f"openai-gpt-finetuned-triviaqa"
-training_args = TrainingArguments(output_dir= model_name,
-                                  evaluation_strategy="epoch",
-                                  num_train_epochs = 2,
-                                  learning_rate=2e-5,
-                                  per_device_train_batch_size=batch_size,
-                                  per_device_eval_batch_size=batch_size,
-                                  weight_decay=0.01,
-                                  evaluation_strategy="epoch",
-                                  disable_tqdm=False,
-                                  logging_steps = logging_steps,
-                                  push_to_hub=False, # if you want to push to the hub
-                                  log_level="error")
-
-
-#%% We now use the Trainer
-
-trainer = Trainer(model=model, args=training_args,
-                  compute_metrics=compute_metrics,
-                  train_dataset=dataset_encoded["train"],
-                  eval_dataset=dataset_encoded["validation"],
-                  tokenizer=tokenizer,
-                  data_collator=)
-
+# Start training
 trainer.train()
 
-#%% After the training, you can output
 
-preds_outputs = trainer.predict(emotions_encoded["validation"])
-preds_outputs.metrics
-
+# preds_outputs = trainer.predict(emotions_encoded["validation"])
+# preds_outputs.metrics
