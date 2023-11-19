@@ -1,4 +1,9 @@
 
+#%%
+
+
+
+#%%
 
 def preprocess_trivia(tokenizer, examples):
     questions = [q.strip() for q in examples["question"]]
